@@ -40,12 +40,20 @@ ENTITIES = [
         value_fn=lambda d: d.get("dv1")
     ),
     SolisSensorEntityDescription(
-        key="dc_voltage_pv1",
+        key="dc_voltage_pv2",
         name="DC Voltage PV2",
         device_class=SensorDeviceClass.VOLTAGE,
         native_unit_of_measurement="V",
         icon="mdi:flash",
         value_fn=lambda d: d.get("dv2")
+    ),
+    SolisSensorEntityDescription(
+        key="ac_output_frequency_r",
+        name="AC Output Frequency R",
+        device_class=SensorDeviceClass.FREQUENCY,
+        native_unit_of_measurement="Hz",
+        icon="mdi:sine-wave",
+        value_fn=lambda d: d.get("a_fo1")
     )
 ]
 
