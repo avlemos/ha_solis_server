@@ -1,11 +1,11 @@
 {
   "domain": "solis_client",
   "name": "Solis Client",
-  "version": "1.0.0",
-  "documentation": "https://github.com/avlemos/ha_solis_client",
-  "requirements": [],
-  "dependencies": [],
   "codeowners": ["@avlemos"],
   "config_flow": true,
-  "iot_class": "local_push"
+  "dependencies": [],
+  "documentation": "https://github.com/avlemos/ha_solis_client",
+  "iot_class": "local_push",
+  "requirements": [],
+  "version": "1.0.0"
 }
