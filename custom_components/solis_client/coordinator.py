@@ -74,11 +74,16 @@ class SolisTCPProtocol(asyncio.Protocol):
                 dv1 = int(hexdata[66:70], 16) / 10
                 dv2 = int(hexdata[70:74], 16) / 10
                 a_fo1 = float(int(hexdata[114:118], 16)) / 100
+                et_ge0 = float(int(hexdata[142:150], 16))/10   
+                hr_ege_t1 = float((int(hexdata[152+2:156],16) << 8) | int(hexdata[156:158],16))
+                
                 # use the normalized key your sensor expects
                 parsed["current_power_apo_t1_W"] = aPo_t1
                 parsed["dv1"] = dv1
                 parsed["dv2"] = dv2
                 parsed["a_fo1"] = a_fo1
+                parsed["hr_ege_t1"] = hr_ege_t1
+                parsed["et_ge0"] = et_ge0
 
                 # serial_start = 30
                 # serial_len = 32

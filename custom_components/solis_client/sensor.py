@@ -57,6 +57,28 @@ ENTITIES = [
         icon="mdi:sine-wave",
         value_fn=lambda d: d.get("a_fo1")
     )
+    ,
+    SolisSensorEntityDescription(
+        key="total_production_hour",
+        name="Total Production Hour",
+        native_unit_of_measurement="h",
+        icon="mdi:history",
+        value_fn=lambda d: (
+            d.get("hr_ege_t1")
+        ),
+        # attributes_fn=lambda d: {"raw": d.get("hr_ege_t1_raw") or d.get("total_production_hour_hr_ege_t1_raw")},
+    ),
+    SolisSensorEntityDescription(
+        key="cumulative_production_active",
+        name="Cumulative Production (Active)",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class="total_increasing",
+        native_unit_of_measurement="kWh",
+        icon="mdi:counter",
+        value_fn=lambda d: (
+            d.get("et_ge0")
+        )
+    ),
 ]
 
 
