@@ -70,20 +70,69 @@ class SolisTCPProtocol(asyncio.Protocol):
             # this is the packet size. if you have a different version
             # feel free to extend here
             if len(hexdata) == 206:
-                aPo_t1 = float(int(hexdata[118:122], 16))
+                serial = str(binascii.unhexlify(hexdata[30:62]), "ascii").strip()
+                inv_t0 = float(int(hexdata[62:66], 16)) / 10
                 dv1 = int(hexdata[66:70], 16) / 10
                 dv2 = int(hexdata[70:74], 16) / 10
-                a_fo1 = float(int(hexdata[114:118], 16)) / 100
-                et_ge0 = float(int(hexdata[142:150], 16))/10   
-                hr_ege_t1 = float((int(hexdata[152+2:156],16) << 8) | int(hexdata[156:158],16))
                 
-                # use the normalized key your sensor expects
-                parsed["current_power_apo_t1_W"] = aPo_t1
+                # DYNAMIC ANCHORS (To prevent data sliding)
+                m_pos = hexdata.find("13", 100) # Frequency Marker
+                f_pos = hexdata.find("ffff")    # Footer Marker
+                
+                # a_fo1 = float(int(hexdata[114:118], 16)) / 100
+                # aPo_t1 = float(int(hexdata[118:122], 16))
+                # et_ge0 = float(int(hexdata[142:150], 16))/10
+                # hr_ege_t1 = float((int(hexdata[154:156],16) << 8) | int(hexdata[156:158],16))
+                # EXTRACT AC DATA (Using Frequency Anchor)
+                if m_pos != -1:
+                    if m_pos % 2 != 0: m_pos -= 1
+                    # AC Voltage (12 chars before 13xx)
+                    av1 = int(hexdata[m_pos-12:m_pos-8], 16) / 10
+                    # Frequency
+                    a_fo1 = float(int(hexdata[m_pos:m_pos+4], 16)) / 100
+                    # Current Power
+                    aPo_t1 = float(int(hexdata[m_pos+4:m_pos+8], 16))
+                else:
+                    av1 = a_fo1 = aPo_t1 = 0.0
+
+                # EXTRACT PRODUCTION DATA (Using Footer Anchor)
+                if f_pos != -1:
+                    # Total Energy (28 chars before ffff)
+                    et_ge0 = float(int(hexdata[f_pos-28:f_pos-20], 16)) / 10
+                    # Total Hours (20 chars before ffff)
+                    hr_ege_t1 = float(int(hexdata[f_pos-20:f_pos-12], 16))
+                    # Inverter Status (12 chars before ffff)
+                    inv_st1 = int(hexdata[f_pos-12:f_pos-8], 16)
+                else:
+                    et_ge0 = hr_ege_t1 = inv_st1 = 0.0
+
+                # CALCULATE ESTIMATED DC VALUES (For HA Dashboards)
+                # Assumes ~97% efficiency to guess DC side metrics
+                total_dc_power = aPo_t1 / 0.97
+                v_total = dv1 + dv2
+                if v_total > 0:
+                    dp1 = round((dv1 / v_total) * total_dc_power, 2)
+                    dp2 = round((dv2 / v_total) * total_dc_power, 2)
+                    dc1 = round(dp1 / dv1, 2) if dv1 > 0 else 0.0
+                    dc2 = round(dp2 / dv2, 2) if dv2 > 0 else 0.0
+                else:
+                    dp1 = dp2 = dc1 = dc2 = 0.0
+
+                
+                parsed["serialno"] = serial
+                parsed["inv_t0"] = inv_t0
                 parsed["dv1"] = dv1
                 parsed["dv2"] = dv2
+                parsed["av1"] = av1
                 parsed["a_fo1"] = a_fo1
-                parsed["hr_ege_t1"] = hr_ege_t1
+                parsed["current_power_apo_t1_W"] = aPo_t1
                 parsed["et_ge0"] = et_ge0
+                parsed["hr_ege_t1"] = hr_ege_t1
+                parsed["inverter_status"] = inv_st1
+                parsed["dc1_current"] = dc1
+                parsed["dc2_current"] = dc2
+                parsed["dp1_power"] = dp1
+                parsed["dp2_power"] = dp2
 
                 # serial_start = 30
                 # serial_len = 32
