@@ -1,5 +1,5 @@
 {
-  "domain": "solis_client",
+  "domain": "solis",
   "name": "Solis Client",
   "codeowners": ["@avlemos"],
   "config_flow": true,
