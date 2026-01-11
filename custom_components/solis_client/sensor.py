@@ -25,6 +25,11 @@ class SolisSensorEntityDescription(SensorEntityDescription):
     # function that returns a dict of attributes for this sensor from the coordinator data
     attributes_fn: Callable[[dict], dict] = lambda data: {}
 
+STATUS_MAPPING = {
+    0: "STANDBY",
+    1: "ACTIVE",
+}
+
 ENTITIES = [
     SolisSensorEntityDescription(
         key="solis_client_current_power",
@@ -105,12 +110,10 @@ ENTITIES = [
     ),
     SolisSensorEntityDescription(
         key="solis_client_inverter_status",
-        name="Inverter status",
-        icon="mdi:information",
-        value_fn=lambda d: (
-            d.get("inverter_status")
-        ),
-        # attributes_fn=lambda d: {"raw": d.get("inv_st1_raw") or d.get("INV_ST1_raw")},
+        name="Inverter Status",
+        device_class=SensorDeviceClass.ENUM,
+        options=["ACTIVE", "STANDBY"],
+        value_fn=lambda d: STATUS_MAPPING.get(d.get("inverter_status"), "UNKNOWN")
     ),
     SolisSensorEntityDescription(
         key="solis_client_dc_current_pv1",
