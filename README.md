@@ -1,4 +1,4 @@
-[![HACS Compliance](https://github.com/avlemos/dobiss/actions/workflows/validate.yaml/badge.svg "HACS Compliance")](https://github.com/avlemos/dobiss/actions/workflows/validate.yaml)
+[![HACS Compliance](https://github.com/avlemos/ha_solis_client/actions/workflows/validate.yaml/badge.svg "HACS Compliance")](https://github.com/avlemos/ha_solis_client/actions/workflows/validate.yaml)
 [![Validate with hassfest](https://github.com/avlemos/ha_solis_client/actions/workflows/hassfest.yaml/badge.svg "hassfest Compliance")](https://github.com/avlemos/ha_solis_client/actions/workflows/hassfest.yaml)
 
 # Intro
