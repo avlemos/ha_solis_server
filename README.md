@@ -12,7 +12,3 @@ Just pick the port where you want to listen for the requests using the HA interf
 # Screenshot
 
 <img width="329" height="767" alt="image" src="https://github.com/user-attachments/assets/c424bd82-d45b-4fdb-934b-79b33c974a03" />
-
-
-# Ugh
-It's not lost in me, that we actually create a Server here, and the Logger is the actual client

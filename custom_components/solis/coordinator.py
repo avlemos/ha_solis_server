@@ -140,7 +140,7 @@ class SolisTCPProtocol(asyncio.Protocol):
                 _LOGGER.debug("Unexpected packet size: %d", len(hexdata))
                 return
         except Exception:
-            _LOGGER.debug("Failed to parse APo_t1 from hex payload", exc_info=True)
+            _LOGGER.debug("Failed to parse hex payload", exc_info=True)
 
         # update coordinator data so entities receive the new parsed payload
         try:
