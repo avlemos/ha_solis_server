@@ -224,19 +224,18 @@ class SolisDataUpdateCoordinator(DataUpdateCoordinator):
             self._stale_unsub = None
 
     async def async_start(self) -> None:
-        """Start listening on TCP port."""
+        """Start listening on TCP port.
+
+        Raises OSError if the port cannot be bound; the caller decides whether
+        that is worth retrying.
+        """
         loop = asyncio.get_running_loop()
-        try:
-            server = await loop.create_server(
-                lambda: SolisTCPProtocol(self),
-                host="0.0.0.0",
-                port=self.port,
-            )
-            self._server = server
-            _LOGGER.info("Listening for Solis TCP connections on port %s", self.port)
-        except Exception:
-            _LOGGER.exception("Failed to open TCP listener on port %s", self.port)
-            raise
+        self._server = await loop.create_server(
+            lambda: SolisTCPProtocol(self),
+            host="0.0.0.0",
+            port=self.port,
+        )
+        _LOGGER.info("Listening for Solis TCP connections on port %s", self.port)
 
     async def async_stop(self) -> None:
         """Stop listening and close any open connections."""

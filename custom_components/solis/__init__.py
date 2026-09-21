@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
 
 from .const import DEFAULT_TCP_PORT
@@ -19,7 +20,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: SolisConfigEntry) -> boo
     coordinator = SolisDataUpdateCoordinator(hass, entry, port=port)
 
     # start the listener in background
-    await coordinator.async_start()
+    try:
+        await coordinator.async_start()
+    except OSError as err:
+        # typically the port is taken (by another program, or by the previous
+        # listener during a reload); Home Assistant retries with a back-off
+        raise ConfigEntryNotReady(f"Cannot listen on TCP port {port}: {err}") from err
+    # also runs if a later setup step fails, so the port is never left bound
+    entry.async_on_unload(coordinator.async_stop)
     entry.runtime_data = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -29,11 +37,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SolisConfigEntry) -> boo
 
 async def async_unload_entry(hass: HomeAssistant, entry: SolisConfigEntry) -> bool:
     """Unload a config entry."""
-    if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        # stop listener/coordinator
-        await entry.runtime_data.async_stop()
-
-    return unload_ok
+    # the listener is stopped by the async_on_unload callback registered in setup
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: SolisConfigEntry) -> bool:
