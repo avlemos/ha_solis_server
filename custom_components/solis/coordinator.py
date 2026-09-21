@@ -17,10 +17,11 @@ from typing import Optional
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DEFAULT_TCP_PORT, STALE_TIMEOUT
+from .const import DEFAULT_TCP_PORT, DOMAIN, STALE_TIMEOUT
 
 START_BYTE = 0xA5
 END_BYTE = 0x15
@@ -201,8 +202,25 @@ class SolisDataUpdateCoordinator(DataUpdateCoordinator):
     def async_handle_packet(self, parsed: dict) -> None:
         """Publish freshly parsed data and restart the staleness watchdog."""
         self.async_set_updated_data(parsed)
+        self._async_update_device_serial(parsed.get("serialno"))
         self._cancel_stale_timer()
         self._stale_unsub = async_call_later(self.hass, STALE_TIMEOUT, self._async_mark_stale)
+
+    @callback
+    def _async_update_device_serial(self, serial: str | None) -> None:
+        """Record the logger's serial number on the device once it is known.
+
+        The device is identified by the config entry id (the serial is not known
+        when the entities are created), so the serial is attached afterwards.
+        Sensors read it from the coordinator data if a packet arrived before the
+        device was created.
+        """
+        if not serial:
+            return
+        dev_reg = dr.async_get(self.hass)
+        device = dev_reg.async_get_device(identifiers={(DOMAIN, self.config_entry.entry_id)})
+        if device and device.serial_number != serial:
+            dev_reg.async_update_device(device.id, serial_number=serial)
 
     @callback
     def _async_mark_stale(self, _now) -> None:

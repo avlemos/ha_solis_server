@@ -183,67 +183,6 @@ class SolisCoordinatorSensor(CoordinatorEntity, SensorEntity):
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
 
-        # Device info is provided via the `device_info` property so it can
-        # reflect the parsed `serialno` from the coordinator when available.
-
-        # internal flag to avoid re-registering device multiple times
-        self._device_registered = False
-        self._unsub_listener = None
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        # listen for coordinator updates so we can register real device when serial arrives
-        self._unsub_listener = self.coordinator.async_add_listener(self._handle_coord_update)
-        # try immediately in case serial already present
-        await self._maybe_register_device()
-
-    async def async_will_remove_from_hass(self) -> None:
-        if self._unsub_listener:
-            self._unsub_listener()
-            self._unsub_listener = None
-        await super().async_will_remove_from_hass()
-
-    async def _handle_coord_update(self) -> None:
-        await self._maybe_register_device()
-
-    async def _maybe_register_device(self) -> None:
-        if self._device_registered:
-            return
-        data = self.coordinator.data or {}
-        serial = data.get("serialno")
-        if not serial:
-            return
-
-        # create device in device registry with the real serial
-        from homeassistant.helpers import device_registry as dr, entity_registry as er
-
-        dev_reg = dr.async_get(self.hass)
-        device = dev_reg.async_get_or_create(
-            config_entry_id=self._entry.entry_id,
-            identifiers={(DOMAIN, str(serial))},
-            name=data.get("device_name") or data.get("name") or f"Solis {serial}",
-            manufacturer="Solis",
-            model=data.get("model"),
-        )
-
-        # move this entity to the new device (if it was created under a different one)
-        ent_reg = er.async_get(self.hass)
-        ent = ent_reg.async_get(self.entity_id)
-        if ent and ent.device_id != device.id:
-            ent_reg.async_update_entity(ent.entity_id, new_device_id=device.id)
-
-        # optionally update config entry unique_id to serial so entry shows serial
-        try:
-            self.hass.config_entries.async_update_entry(self._entry, unique_id=str(serial))
-        except Exception:
-            pass
-
-        self._device_registered = True
-        # no longer need the listener
-        if self._unsub_listener:
-            self._unsub_listener()
-            self._unsub_listener = None
-
     @property
     def native_value(self) -> Any:
         data = self.coordinator.data or {}
@@ -251,17 +190,17 @@ class SolisCoordinatorSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return a DeviceInfo that uses parsed `serialno` when available."""
-        data = self.coordinator.data or {}
-        serial = data.get("serialno") or getattr(self._entry, "unique_id", None) or self._entry.entry_id
-        name = data.get("device_name") or data.get("name") or getattr(self._entry, "title", None) or f"Solis {serial}"
-        model = data.get("model")
-        return DeviceInfo(
-            identifiers={(DOMAIN, str(serial))},
-            name=name,
+        """Return the logger device, keyed by config entry (the serial arrives later)."""
+        info = DeviceInfo(
+            identifiers={(DOMAIN, self._entry.entry_id)},
+            name=self._entry.title,
             manufacturer="Solis",
-            model=model,
         )
+        # already known if a packet arrived before the entities were created;
+        # otherwise the coordinator adds it to the device when it arrives
+        if serial := (self.coordinator.data or {}).get("serialno"):
+            info["serial_number"] = serial
+        return info
 
     @property
     def extra_state_attributes(self) -> dict:
