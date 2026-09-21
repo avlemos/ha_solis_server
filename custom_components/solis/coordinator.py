@@ -15,11 +15,12 @@ from functools import reduce
 from struct import pack
 from typing import Optional
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from custom_components.solis.const import DEFAULT_TCP_PORT, STALE_TIMEOUT
+from .const import DEFAULT_TCP_PORT, STALE_TIMEOUT
 
 START_BYTE = 0xA5
 END_BYTE = 0x15
@@ -171,11 +172,14 @@ class SolisTCPProtocol(asyncio.Protocol):
             _LOGGER.debug("TCP connection closed")
 
 
+type SolisConfigEntry = ConfigEntry[SolisDataUpdateCoordinator]
+
+
 class SolisDataUpdateCoordinator(DataUpdateCoordinator):
     """Coordinator that owns the TCP server and current parsed data."""
 
-    def __init__(self, hass: HomeAssistant, entry, port: int = DEFAULT_TCP_PORT):
-        super().__init__(hass, _LOGGER, name="solis_client", update_interval=None)
+    def __init__(self, hass: HomeAssistant, entry: SolisConfigEntry, port: int = DEFAULT_TCP_PORT):
+        super().__init__(hass, _LOGGER, config_entry=entry, name="solis_client", update_interval=None)
         self._entry = entry
         # keep backward-compatible default constant name — this is the TCP listen port now
         self.port = port

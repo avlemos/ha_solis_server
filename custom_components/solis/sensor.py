@@ -2,26 +2,39 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Callable
 
 from homeassistant.components.sensor import (
+    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
-    SensorDeviceClass,
+    SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfFrequency,
+    UnitOfPower,
+    UnitOfTemperature,
+    UnitOfTime,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import DeviceInfo
 
 from .const import DOMAIN
-from .coordinator import SolisDataUpdateCoordinator
+from .coordinator import SolisConfigEntry, SolisDataUpdateCoordinator
 
-@dataclass
+_LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, kw_only=True)
 class SolisSensorEntityDescription(SensorEntityDescription):
-    value_fn: Callable[[dict], Any] = lambda data: None
+    value_fn: Callable[[dict], Any]
     # function that returns a dict of attributes for this sensor from the coordinator data
     attributes_fn: Callable[[dict], dict] = lambda data: {}
 
@@ -33,86 +46,81 @@ STATUS_MAPPING = {
 ENTITIES = [
     SolisSensorEntityDescription(
         key="solis_client_current_power",
-        name="Current power",
+        translation_key="current_power",
         device_class=SensorDeviceClass.POWER,
-        native_unit_of_measurement="W",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
         icon="mdi:solar-power",
         value_fn=lambda d: d.get("current_power_apo_t1_W")
     ),
     SolisSensorEntityDescription(
         key="solis_client_dc_voltage_pv1",
-        name="DC Voltage PV1",
+        translation_key="dc_voltage_pv1",
         device_class=SensorDeviceClass.VOLTAGE,
-        native_unit_of_measurement="V",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         icon="mdi:flash",
         value_fn=lambda d: d.get("dv1")
     ),
     SolisSensorEntityDescription(
         key="solis_client_dc_voltage_pv2",
-        name="DC Voltage PV2",
+        translation_key="dc_voltage_pv2",
         device_class=SensorDeviceClass.VOLTAGE,
-        native_unit_of_measurement="V",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         icon="mdi:flash",
         value_fn=lambda d: d.get("dv2")
     ),
     SolisSensorEntityDescription(
         key="solis_client_ac_output_frequency_r",
-        name="AC Output Frequency R",
+        translation_key="ac_output_frequency_r",
         device_class=SensorDeviceClass.FREQUENCY,
-        native_unit_of_measurement="Hz",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfFrequency.HERTZ,
         icon="mdi:sine-wave",
         value_fn=lambda d: d.get("a_fo1")
-    )
-    ,
-    SolisSensorEntityDescription(
-        key="solis_client_total_production_hour",
-        name="Total Production Hour",
-        native_unit_of_measurement="h",
-        state_class="total_increasing",
-        icon="mdi:history",
-        value_fn=lambda d: (
-            d.get("hr_ege_t1")
-        ),
-        # attributes_fn=lambda d: {"raw": d.get("hr_ege_t1_raw") or d.get("total_production_hour_hr_ege_t1_raw")},
     ),
     SolisSensorEntityDescription(
-        key="csolis_client_umulative_production_active",
-        name="Cumulative Production (Active)",
+        key="solis_client_total_production_hour",
+        translation_key="total_production_hour",
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        icon="mdi:history",
+        value_fn=lambda d: d.get("hr_ege_t1"),
+    ),
+    SolisSensorEntityDescription(
+        key="solis_client_cumulative_production_active",
+        translation_key="cumulative_production_active",
         device_class=SensorDeviceClass.ENERGY,
-        state_class="total_increasing",
-        native_unit_of_measurement="kWh",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         icon="mdi:counter",
-        value_fn=lambda d: (
-            d.get("et_ge0")
-        )
+        value_fn=lambda d: d.get("et_ge0"),
     ),
     SolisSensorEntityDescription(
         key="solis_client_temperature_inverter",
-        name="Temperature - Inverter",
+        translation_key="temperature_inverter",
         device_class=SensorDeviceClass.TEMPERATURE,
-        native_unit_of_measurement="°C",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         icon="mdi:thermometer",
-        value_fn=lambda d: (
-            d.get("inv_t0")
-        ),
-        # attributes_fn=lambda d: {"raw": d.get("inv_t0_raw")},
+        value_fn=lambda d: d.get("inv_t0"),
     ),
     SolisSensorEntityDescription(
         key="solis_client_ac_voltage_r",
-        name="AC Voltage R",
+        translation_key="ac_voltage_r",
         device_class=SensorDeviceClass.VOLTAGE,
-        native_unit_of_measurement="V",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         icon="mdi:flash",
-        value_fn=lambda d: (
-            d.get("av1")
-        ),
-        # attributes_fn=lambda d: {"raw": d.get("av1_raw") or d.get("AV1_raw")},
+        value_fn=lambda d: d.get("av1"),
     ),
     SolisSensorEntityDescription(
         key="solis_client_inverter_status",
-        name="Inverter Status",
+        translation_key="inverter_status",
         device_class=SensorDeviceClass.ENUM,
-        options=["ACTIVE", "STANDBY"],
+        options=["ACTIVE", "STANDBY", "FAULT"],
         value_fn=lambda d: (
             # 1. Check if the raw inverter_status is something other than 0 or 1
             "FAULT" if d.get("inverter_status") not in [0, 1, None] else (
@@ -123,67 +131,61 @@ ENTITIES = [
     ),
     SolisSensorEntityDescription(
         key="solis_client_dc_current_pv1",
-        name="DC Current PV1",
+        translation_key="dc_current_pv1",
         device_class=SensorDeviceClass.CURRENT,
-        native_unit_of_measurement="A",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         icon="mdi:current-dc",
-        value_fn=lambda d: (d.get("dc1_current") ),
-        # attributes_fn=lambda d: {"raw": d.get("dc1_raw") or d.get("DC1_raw")},
+        value_fn=lambda d: d.get("dc1_current"),
     ),
     SolisSensorEntityDescription(
         key="solis_client_dc_current_pv2",
-        name="DC Current PV2",
+        translation_key="dc_current_pv2",
         device_class=SensorDeviceClass.CURRENT,
-        native_unit_of_measurement="A",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         icon="mdi:current-dc",
-        value_fn=lambda d: (d.get("dc2_current")),
-        # attributes_fn=lambda d: {"raw": d.get("dc2_raw") or d.get("DC2_raw")},
+        value_fn=lambda d: d.get("dc2_current"),
     ),
     SolisSensorEntityDescription(
         key="solis_client_dc_power_pv1",
-        name="DC Power PV1",
+        translation_key="dc_power_pv1",
         device_class=SensorDeviceClass.POWER,
-        native_unit_of_measurement="W",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
         icon="mdi:flash",
-        value_fn=lambda d: (d.get("dp1_power")),
-        # attributes_fn=lambda d: {"raw": d.get("dp1_raw") or d.get("DP1_raw")},
+        value_fn=lambda d: d.get("dp1_power"),
     ),
     SolisSensorEntityDescription(
         key="solis_client_dc_power_pv2",
-        name="DC Power PV2",
+        translation_key="dc_power_pv2",
         device_class=SensorDeviceClass.POWER,
-        native_unit_of_measurement="W",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
         icon="mdi:flash",
-        value_fn=lambda d: (d.get("dp2_power")),
-        # attributes_fn=lambda d: {"raw": d.get("dp2_raw") or d.get("DP2_raw")},
+        value_fn=lambda d: d.get("dp2_power"),
     ),
 ]
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    coordinator: SolisDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    async_add_entities([SolisCoordinatorSensor(coordinator, entry, desc) for desc in ENTITIES], True)
+async def async_setup_entry(hass: HomeAssistant, entry: SolisConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+    coordinator = entry.runtime_data
+    async_add_entities(SolisCoordinatorSensor(coordinator, entry, desc) for desc in ENTITIES)
 
 
 class SolisCoordinatorSensor(CoordinatorEntity, SensorEntity):
-    def __init__(self, coordinator: SolisDataUpdateCoordinator, entry: ConfigEntry, description: SolisSensorEntityDescription):
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator: SolisDataUpdateCoordinator, entry: SolisConfigEntry, description: SolisSensorEntityDescription):
         super().__init__(coordinator)
+        # name, unit, device/state class and icon all come from the description
         self.entity_description = description
         self._entry = entry
-        # friendly name: use description name only (e.g. "Current power")
-        self._attr_name = description.name
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
 
         # Device info is provided via the `device_info` property so it can
         # reflect the parsed `serialno` from the coordinator when available.
 
-        # expose device info from the description so HA picks up unit, device class and icon
-        if description.device_class:
-            self._attr_device_class = description.device_class
-        if description.native_unit_of_measurement:
-            self._attr_native_unit_of_measurement = description.native_unit_of_measurement
-        if description.icon:
-            self._attr_icon = description.icon
         # internal flag to avoid re-registering device multiple times
         self._device_registered = False
         self._unsub_listener = None
@@ -268,6 +270,5 @@ class SolisCoordinatorSensor(CoordinatorEntity, SensorEntity):
         try:
             return dict(self.entity_description.attributes_fn(data) or {})
         except Exception:
-            _LOGGER = __import__("logging").getLogger(__name__)
             _LOGGER.exception("attributes_fn failed")
             return {}

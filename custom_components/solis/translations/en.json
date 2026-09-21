@@ -1,0 +1,40 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Solis Client",
+        "description": "Choose the TCP port to listen on. Configure the same port, together with the address of this Home Assistant host, under \"Remote Server\" in the logger's web interface.",
+        "data": {
+          "port": "Port"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Solis Client",
+        "data": {
+          "port": "Port"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "current_power": { "name": "Current power" },
+      "dc_voltage_pv1": { "name": "DC Voltage PV1" },
+      "dc_voltage_pv2": { "name": "DC Voltage PV2" },
+      "ac_output_frequency_r": { "name": "AC Output Frequency R" },
+      "total_production_hour": { "name": "Total Production Hour" },
+      "cumulative_production_active": { "name": "Cumulative Production (Active)" },
+      "temperature_inverter": { "name": "Temperature - Inverter" },
+      "ac_voltage_r": { "name": "AC Voltage R" },
+      "inverter_status": { "name": "Inverter Status" },
+      "dc_current_pv1": { "name": "DC Current PV1" },
+      "dc_current_pv2": { "name": "DC Current PV2" },
+      "dc_power_pv1": { "name": "DC Power PV1" },
+      "dc_power_pv2": { "name": "DC Power PV2" }
+    }
+  }
+}

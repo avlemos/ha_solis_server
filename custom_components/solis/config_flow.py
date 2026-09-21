@@ -20,6 +20,8 @@ class SolisConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Solis Client."""
 
     VERSION = 1
+    # 2: corrected the misspelled unique_id of the cumulative production sensor
+    MINOR_VERSION = 2
 
     async def async_step_user(self, user_input=None):
         if user_input is None:

@@ -1,6 +1,6 @@
 {
     "name": "Solis Client decoder",
-    "homeassistant": "2024.6.0",
+    "homeassistant": "2024.11.0",
     "content_in_root": false,
     "zip_release": false,
     "render_readme": false
