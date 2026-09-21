@@ -5,7 +5,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_PORT
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 
 from .const import DOMAIN, DEFAULT_TCP_PORT
 
@@ -16,6 +16,15 @@ STEP_USER_SCHEMA = vol.Schema(
 )
 
 
+def _port_in_use(hass: HomeAssistant, port: int, ignore_entry_id: str | None = None) -> bool:
+    """Whether another Solis entry already listens on this port."""
+    return any(
+        entry.entry_id != ignore_entry_id
+        and entry.options.get(CONF_PORT, DEFAULT_TCP_PORT) == port
+        for entry in hass.config_entries.async_entries(DOMAIN)
+    )
+
+
 class SolisConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Solis Client."""
 
@@ -24,11 +33,20 @@ class SolisConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     MINOR_VERSION = 2
 
     async def async_step_user(self, user_input=None):
-        if user_input is None:
-            return self.async_show_form(step_id="user", data_schema=STEP_USER_SCHEMA)
+        errors = {}
+        if user_input is not None:
+            port = int(user_input[CONF_PORT])
+            if _port_in_use(self.hass, port):
+                errors[CONF_PORT] = "port_in_use"
+            else:
+                # create entry, store port in options so it can be changed later
+                return self.async_create_entry(title="Solis Client", data={}, options={CONF_PORT: port})
 
-        # create entry, store port in options so it can be changed later
-        return self.async_create_entry(title="Solis Client", data={}, options={CONF_PORT: int(user_input[CONF_PORT])})
+        return self.async_show_form(
+            step_id="user",
+            data_schema=self.add_suggested_values_to_schema(STEP_USER_SCHEMA, user_input),
+            errors=errors,
+        )
 
     @staticmethod
     @callback
@@ -44,13 +62,20 @@ class SolisOptionsFlowHandler(config_entries.OptionsFlow):
         self._config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
+        errors = {}
         current = self._config_entry.options.get(CONF_PORT, DEFAULT_TCP_PORT)
-        if user_input is None:
-            return self.async_show_form(
-                step_id="init",
-                data_schema=vol.Schema(
-                    {vol.Required(CONF_PORT, default=current): vol.All(int, vol.Range(min=1, max=65535))}
-                ),
-            )
+        if user_input is not None:
+            port = int(user_input[CONF_PORT])
+            if _port_in_use(self.hass, port, ignore_entry_id=self._config_entry.entry_id):
+                errors[CONF_PORT] = "port_in_use"
+                current = port
+            else:
+                return self.async_create_entry(title="", data={CONF_PORT: port})
 
-        return self.async_create_entry(title="", data={CONF_PORT: int(user_input[CONF_PORT])})
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_PORT, default=current): vol.All(int, vol.Range(min=1, max=65535))}
+            ),
+            errors=errors,
+        )
