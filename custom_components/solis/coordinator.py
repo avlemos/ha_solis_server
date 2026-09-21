@@ -90,28 +90,30 @@ class SolisTCPProtocol(asyncio.Protocol):
                 # aPo_t1 = float(int(hexdata[118:122], 16))
                 # et_ge0 = float(int(hexdata[142:150], 16))/10
                 # hr_ege_t1 = float((int(hexdata[154:156],16) << 8) | int(hexdata[156:158],16))
+                # Without both anchors we can't trust any of the AC/production
+                # values. Drop the packet rather than publishing zeros: the
+                # energy/hours sensors are total_increasing, so a 0 would be
+                # recorded as a meter reset.
+                if m_pos == -1 or f_pos < 28:
+                    _LOGGER.warning("Packet missing frequency/footer markers, ignoring: %s", hexdata)
+                    return
+
                 # EXTRACT AC DATA (Using Frequency Anchor)
-                if m_pos != -1:
-                    if m_pos % 2 != 0: m_pos -= 1
-                    # AC Voltage (12 chars before 13xx)
-                    av1 = int(hexdata[m_pos-12:m_pos-8], 16) / 10
-                    # Frequency
-                    a_fo1 = float(int(hexdata[m_pos:m_pos+4], 16)) / 100
-                    # Current Power
-                    aPo_t1 = float(int(hexdata[m_pos+4:m_pos+8], 16))
-                else:
-                    av1 = a_fo1 = aPo_t1 = 0.0
+                if m_pos % 2 != 0: m_pos -= 1
+                # AC Voltage (12 chars before 13xx)
+                av1 = int(hexdata[m_pos-12:m_pos-8], 16) / 10
+                # Frequency
+                a_fo1 = float(int(hexdata[m_pos:m_pos+4], 16)) / 100
+                # Current Power
+                aPo_t1 = float(int(hexdata[m_pos+4:m_pos+8], 16))
 
                 # EXTRACT PRODUCTION DATA (Using Footer Anchor)
-                if f_pos != -1:
-                    # Total Energy (28 chars before ffff)
-                    et_ge0 = float(int(hexdata[f_pos-28:f_pos-20], 16)) / 10
-                    # Total Hours (20 chars before ffff)
-                    hr_ege_t1 = float(int(hexdata[f_pos-20:f_pos-12], 16))
-                    # Inverter Status (12 chars before ffff)
-                    inv_st1 = int(hexdata[f_pos-12:f_pos-8], 16)
-                else:
-                    et_ge0 = hr_ege_t1 = inv_st1 = 0.0
+                # Total Energy (28 chars before ffff)
+                et_ge0 = float(int(hexdata[f_pos-28:f_pos-20], 16)) / 10
+                # Total Hours (20 chars before ffff)
+                hr_ege_t1 = float(int(hexdata[f_pos-20:f_pos-12], 16))
+                # Inverter Status (12 chars before ffff)
+                inv_st1 = int(hexdata[f_pos-12:f_pos-8], 16)
 
                 # CALCULATE ESTIMATED DC VALUES (For HA Dashboards)
                 # Assumes ~97% efficiency to guess DC side metrics
@@ -150,7 +152,10 @@ class SolisTCPProtocol(asyncio.Protocol):
                 _LOGGER.debug("Unexpected packet size: %d", len(hexdata))
                 return
         except Exception:
-            _LOGGER.debug("Failed to parse hex payload", exc_info=True)
+            # Don't fall through: publishing a partial/empty dict would wipe
+            # the last good readings.
+            _LOGGER.warning("Failed to parse hex payload, ignoring packet: %s", hexdata, exc_info=True)
+            return
 
         # update coordinator data so entities receive the new parsed payload
         try:
