@@ -15,13 +15,23 @@ from functools import reduce
 from struct import pack
 from typing import Optional
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from custom_components.solis.const import DEFAULT_TCP_PORT
+from custom_components.solis.const import DEFAULT_TCP_PORT, STALE_TIMEOUT
 
 START_BYTE = 0xA5
 END_BYTE = 0x15
+
+# Instantaneous readings that no longer mean anything once the inverter has
+# stopped reporting; they become unknown when the data goes stale.
+_STALE_UNKNOWN_KEYS = ("inv_t0", "dv1", "dv2", "av1", "a_fo1", "dc1_current", "dc2_current")
+# Power readings drop to zero (the inverter is not producing), which also makes
+# the Inverter Status sensor report STANDBY.
+_STALE_ZERO_KEYS = ("current_power_apo_t1_W", "dp1_power", "dp2_power")
+# Everything else (serial, lifetime energy, lifetime hours, raw status) keeps
+# its last value.
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -145,10 +155,7 @@ class SolisTCPProtocol(asyncio.Protocol):
         # update coordinator data so entities receive the new parsed payload
         try:
             _LOGGER.debug("Setting updated data on coordinator: %s", parsed)
-            result = self.coordinator.async_set_updated_data(parsed)
-            # if the coordinator method returned a coroutine, schedule it
-            if asyncio.iscoroutine(result):
-                asyncio.create_task(result)
+            self.coordinator.async_handle_packet(parsed)
         except Exception:
             _LOGGER.exception("Failed to set updated data on coordinator")
 
@@ -168,11 +175,38 @@ class SolisDataUpdateCoordinator(DataUpdateCoordinator):
         # keep backward-compatible default constant name — this is the TCP listen port now
         self.port = port
         self._server: Optional[asyncio.base_events.Server] = None
+        self._stale_unsub: Optional[CALLBACK_TYPE] = None
 
     async def _async_update_data(self):
         """Return the last known data. No periodic polling; coordinator is push-driven."""
         # DataUpdateCoordinator expects this method when async_request_refresh() is used.
         return self.data if self.data is not None else {}
+
+    @callback
+    def async_handle_packet(self, parsed: dict) -> None:
+        """Publish freshly parsed data and restart the staleness watchdog."""
+        self.async_set_updated_data(parsed)
+        self._cancel_stale_timer()
+        self._stale_unsub = async_call_later(self.hass, STALE_TIMEOUT, self._async_mark_stale)
+
+    @callback
+    def _async_mark_stale(self, _now) -> None:
+        """No packet for STALE_TIMEOUT: the inverter is asleep, stop showing old readings."""
+        self._stale_unsub = None
+        if not self.data:
+            return
+        _LOGGER.info("No packet from the inverter for %s s, marking readings as stale", STALE_TIMEOUT)
+        stale = dict(self.data)
+        for key in _STALE_UNKNOWN_KEYS:
+            stale[key] = None
+        for key in _STALE_ZERO_KEYS:
+            stale[key] = 0.0
+        self.async_set_updated_data(stale)
+
+    def _cancel_stale_timer(self) -> None:
+        if self._stale_unsub:
+            self._stale_unsub()
+            self._stale_unsub = None
 
     async def async_start(self) -> None:
         """Start listening on TCP port."""
@@ -191,6 +225,7 @@ class SolisDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def async_stop(self) -> None:
         """Stop listening / close server."""
+        self._cancel_stale_timer()
         if self._server:
             self._server.close()
             try:
