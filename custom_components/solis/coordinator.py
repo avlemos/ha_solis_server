@@ -50,6 +50,8 @@ class SolisTCPProtocol(asyncio.Protocol):
 
     def connection_made(self, transport: asyncio.Transport) -> None:
         self.transport = transport
+        # tracked so the coordinator can close open connections on unload
+        self.coordinator.transports.add(transport)
         peer = transport.get_extra_info("peername")
         _LOGGER.debug("TCP connection from %s", peer)
 
@@ -166,6 +168,8 @@ class SolisTCPProtocol(asyncio.Protocol):
             _LOGGER.exception("Failed to set updated data on coordinator")
 
     def connection_lost(self, exc: Optional[Exception]) -> None:
+        if self.transport is not None:
+            self.coordinator.transports.discard(self.transport)
         if exc:
             _LOGGER.debug("TCP connection lost with error: %s", exc)
         else:
@@ -184,6 +188,8 @@ class SolisDataUpdateCoordinator(DataUpdateCoordinator):
         # keep backward-compatible default constant name — this is the TCP listen port now
         self.port = port
         self._server: Optional[asyncio.base_events.Server] = None
+        # open logger connections; the loggers keep theirs open between reports
+        self.transports: set[asyncio.Transport] = set()
         self._stale_unsub: Optional[CALLBACK_TYPE] = None
 
     async def _async_update_data(self):
@@ -233,14 +239,19 @@ class SolisDataUpdateCoordinator(DataUpdateCoordinator):
             raise
 
     async def async_stop(self) -> None:
-        """Stop listening / close server."""
+        """Stop listening and close any open connections."""
         self._cancel_stale_timer()
         if self._server:
             self._server.close()
+            # Server.wait_closed() waits for open connections to finish, and the
+            # logger holds its connection open, so close them ourselves.
+            for transport in list(self.transports):
+                transport.close()
             try:
-                await self._server.wait_closed()
-            except Exception:
-                _LOGGER.exception("Error while waiting for TCP server to close")
+                async with asyncio.timeout(5):
+                    await self._server.wait_closed()
+            except TimeoutError:
+                _LOGGER.warning("Timed out waiting for the TCP listener to close")
             self._server = None
             _LOGGER.info("Stopped Solis TCP listener")
             
