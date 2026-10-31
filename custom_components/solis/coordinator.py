@@ -218,7 +218,9 @@ class SolisDataUpdateCoordinator(DataUpdateCoordinator):
         if not serial:
             return
         dev_reg = dr.async_get(self.hass)
-        device = dev_reg.async_get_device(identifiers={(DOMAIN, self.config_entry.entry_id)})
+        device = dev_reg.async_get_device_by_identifier(
+            (DOMAIN, self.config_entry.entry_id), self.config_entry.entry_id
+        )
         if device and device.serial_number != serial:
             dev_reg.async_update_device(device.id, serial_number=serial)
 
